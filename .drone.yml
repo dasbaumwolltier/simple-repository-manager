@@ -9,8 +9,8 @@ steps:
     image: dasbaumwolltier/rust-musl-builder
     commands:
       - ls -la
-      - cargo test
       - cargo build --release
+      - cargo test --release
 
   - name: docker
     image: plugins/docker
