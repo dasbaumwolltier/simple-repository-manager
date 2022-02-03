@@ -5,16 +5,11 @@ type: kubernetes
 name: release
 
 steps:
-  - name: test
-    image: rust:1-alpine3.15
-    commands:
-    - apk add --no-cache musl-dev
-    - cargo test
-
-  - name: build
+  - name: test and build
     image: dasbaumwolltier/rust-musl-builder
     commands:
       - ls -la
+      - cargo test
       - cargo build --release
 
   - name: docker
