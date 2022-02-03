@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use actix_web::Error;
 use actix_web::error::{ErrorForbidden, ErrorUnauthorized};
 use bcrypt::verify;

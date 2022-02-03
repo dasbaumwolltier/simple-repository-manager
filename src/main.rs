@@ -1,16 +1,12 @@
 use std::collections::HashMap;
-use std::fmt::Error;
 use std::fs::File;
 use std::io::{BufReader, ErrorKind};
 use std::sync::Arc;
 use actix_cors::Cors;
-use actix_files::Files;
 use actix_web::{App, HttpServer};
 use actix_web::web::Data;
-use actix_web_httpauth::middleware::HttpAuthentication;
 use clap::Arg;
-use log::{error, LevelFilter};
-use once_cell::sync::OnceCell;
+use log::{error};
 use simplelog::{ColorChoice, Config, TerminalMode, TermLogger};
 use crate::config::RepositoryConfig;
 use crate::repository::file::FileRepository;

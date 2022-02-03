@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde_derive::Deserialize;
 use crate::config::Permission::Write;
 
 #[derive(Deserialize)]

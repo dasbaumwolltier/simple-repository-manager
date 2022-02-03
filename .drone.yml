@@ -2,9 +2,14 @@
 
 kind: pipeline
 type: kubernetes
-name: build-image
+name: release
 
 steps:
+  - name: fetch dependencies
+    image: rust:1-alpine3.15
+    commands:
+    - cargo fetch
+
   - name: test
     image: rust:1-alpine3.15
     commands:

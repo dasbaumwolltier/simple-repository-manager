@@ -3,22 +3,17 @@ use std::fs::{create_dir_all, File};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use actix_cors::CorsError::BadRequestHeaders;
-use actix_files::{Directory, NamedFile};
+use actix_files::{NamedFile};
 use actix_multipart::Multipart;
-use actix_web::{Either, HttpMessage, HttpResponse, Responder, web};
+use actix_web::{Either, HttpResponse, Responder, web};
 use actix_web::{get, put};
-use actix_web::dev::{Extensions, ServiceRequest};
-use actix_web::error::{Error, ErrorBadRequest, ErrorInternalServerError, ErrorNotFound, ErrorUnauthorized};
-use actix_web_httpauth::extractors::basic::BasicAuth;
+use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound};
 use actix_web_httpauth::headers::authorization::{Authorization, Basic};
-use futures_util::future::err;
 use futures_util::TryStreamExt;
 use log::error;
 use path_clean::PathClean;
 use crate::{enclose, RepositoryProvider};
 use crate::config::Permission;
-use crate::config::Permission::Read;
 
 // pub async fn validator(req: ServiceRequest, credentials: BasicAuth) -> Result<ServiceRequest, Error> {
 //     req.extensions_mut().insert(credentials);

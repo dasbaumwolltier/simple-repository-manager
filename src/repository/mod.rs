@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use actix_web::Error;
 use crate::config::Permission;
 
