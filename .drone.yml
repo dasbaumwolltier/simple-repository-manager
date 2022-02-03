@@ -14,7 +14,7 @@ steps:
     image: plugins/docker
     settings:
       repo: dasbaumwolltier/simple-repository-manager
-      tags: $(DRONE_TAG), latest
+      tags: latest
       username:
         from_secret: docker_hub_username
       password:
@@ -22,6 +22,4 @@ steps:
 
 trigger:
   branch:
-  - release
-  event:
-  - tag
+    - release
