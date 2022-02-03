@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::fs::File;
+use std::io;
 use std::io::{BufReader, ErrorKind};
+use std::str::FromStr;
 use std::sync::Arc;
 use actix_cors::Cors;
 use actix_web::{App, HttpServer};
@@ -29,13 +31,23 @@ async fn main() -> Result<(), std::io::Error> {
             .value_name("FILE")
             .required(true)
             .takes_value(true)
+        ).arg(Arg::new("host")
+            .short('h')
+            .long("host")
+            .value_name("HOST")
+            .default_missing_value("127.0.0.1")
+        ).arg(Arg::new("port")
+            .short('p')
+            .long("port")
+            .value_name("PORT")
+            .default_missing_value("8080")
         ).arg(Arg::new("verbose")
-        .short('v')
-        .multiple_occurrences(true)
-        .long("verbose")
-        .required(false)
-        .takes_value(false)
-    ).get_matches();
+            .short('v')
+            .multiple_occurrences(true)
+            .long("verbose")
+            .required(false)
+            .takes_value(false)
+        ).get_matches();
 
     let level = match matches.occurrences_of("verbose") {
         0 => log::LevelFilter::Info,
@@ -49,6 +61,14 @@ async fn main() -> Result<(), std::io::Error> {
         TerminalMode::Stdout,
         ColorChoice::Auto,
     ).map_err(|e| std::io::Error::new(ErrorKind::Other, e))?;
+
+    let port = match u16::from_str(matches.value_of("port").unwrap()) {
+        Ok(port) => port,
+        Err(e) => {
+            error!("Could not parse port: {}!", e);
+            return Err(io::Error::new(ErrorKind::Other, e));
+        }
+    };
 
     let config_file = match File::open(matches.value_of("config").unwrap()) {
         Ok(config_file) => config_file,
@@ -91,7 +111,7 @@ async fn main() -> Result<(), std::io::Error> {
             .service(rest::retrieve)
             .service(rest::upload)
     })
-        .bind(("127.0.0.1", 8080))?
+        .bind((matches.value_of("host").unwrap(), port))?
         .run()
         .await?;
 
