@@ -14,7 +14,7 @@ steps:
   - name: build
     image: dasbaumwolltier/rust-musl-builder
     commands:
-      - ls -la /build
+      - ls -la
       - cargo build --release
 
   - name: docker
