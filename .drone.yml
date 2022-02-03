@@ -11,6 +11,12 @@ steps:
     - apk add --no-cache musl-dev
     - cargo test
 
+  - name: build
+    image: dasbaumwolltier/rust-musl-builder
+    commands:
+      - ls -la /build
+      - cargo build --release
+
   - name: docker
     image: plugins/docker
     settings:
