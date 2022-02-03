@@ -17,6 +17,7 @@ steps:
     settings:
       repo: dasbaumwolltier/simple-repository-manager
       tags: latest
+      mtu: 1400
       username:
         from_secret: docker_hub_username
       password:
