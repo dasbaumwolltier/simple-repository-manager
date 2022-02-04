@@ -20,7 +20,7 @@ use crate::config::Permission;
 //     Ok(req)
 // }
 
-#[get("/{repository}/{path:[^?]+}")]
+#[get("/{repository}/{path:[^?]*}")]
 pub async fn retrieve(repository: web::Path<(String, String)>, auth: Option<web::Header<Authorization<Basic>>>, providers: web::Data<HashMap<String, Arc<dyn RepositoryProvider + Send + Sync>>>) -> impl Responder {
     let (repository, path) = repository.into_inner();
     let provider = match providers.get(&repository) {
@@ -66,7 +66,7 @@ pub async fn retrieve(repository: web::Path<(String, String)>, auth: Option<web:
     }
 }
 
-#[put("/{repository}/{path:[^?]+}")]
+#[put("/{repository}/{path:[^?]*}")]
 pub async fn upload(mut content: Multipart, repository: web::Path<(String, String)>, auth: Option<web::Header<Authorization<Basic>>>, providers: web::Data<HashMap<String, Arc<dyn RepositoryProvider + Send + Sync>>>) -> impl Responder {
     let (repository, path) = repository.into_inner();
     let provider = match providers.get(&repository) {
