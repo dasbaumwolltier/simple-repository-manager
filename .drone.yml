@@ -11,6 +11,7 @@ steps:
       - ls -la
       - cargo build --release
       - cargo test --release
+      - echo -n "latest, $(cat Cargo.toml| grep version | cut -d' ' -f3 | tr -d '"')" > .tags
 
   - name: docker
     image: plugins/docker
