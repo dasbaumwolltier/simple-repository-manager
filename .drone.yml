@@ -11,13 +11,12 @@ steps:
       - ls -la
       - cargo build --release
       - cargo test --release
-      - echo -n "latest,$(cat Cargo.toml| grep version | cut -d' ' -f3 | tr -d '"')" > .tags
+      - echo -n "latest,$(cat Cargo.toml| grep version | cut -d' ' -f3 | tr -d '"')" | tee .tags
 
   - name: docker
     image: plugins/docker
     settings:
       repo: dasbaumwolltier/simple-repository-manager
-      tags: latest
       mtu: 1400
       username:
         from_secret: docker_hub_username
