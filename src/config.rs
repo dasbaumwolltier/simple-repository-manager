@@ -8,9 +8,19 @@ pub struct Config {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct UserConfig {
     pub username: String,
-    pub password: String
+    pub password_type: PasswordType,
+    pub password: String,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PasswordType {
+    BCrypt,
+    Argon2,
+    Blake3
 }
 
 #[derive(Deserialize)]

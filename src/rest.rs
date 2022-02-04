@@ -33,7 +33,7 @@ pub async fn retrieve(repository: web::Path<(String, String)>, auth: Option<web:
         scheme.clone().map(|b| b.user_id().to_string()),
         scheme.map(|b| b.password().map(|p| p.to_string())).flatten(),
        &Permission::Read
-    ) {
+    ).await {
         Err(e) => return Err(e),
         _ => {}
     }
@@ -44,7 +44,7 @@ pub async fn retrieve(repository: web::Path<(String, String)>, auth: Option<web:
         file = PathBuf::from(string.get(3..).unwrap());
     }
 
-    let file = match provider.get_file(&file) {
+    let file = match provider.get_file(&file).await {
         Ok(file) => file,
         Err(e) => {
             error!("Invalid path for repo {}: {}!", repository, file.to_str().unwrap());
@@ -52,7 +52,7 @@ pub async fn retrieve(repository: web::Path<(String, String)>, auth: Option<web:
         }
     };
 
-    if web::block(enclose! { (file) move || file.is_dir() }).await? {
+    if file.is_dir() {
         // return Ok(Either::Left(Directory::new(file, PathBuf::new())));
         return Ok(Either::Left(""))
     }
@@ -79,7 +79,7 @@ pub async fn upload(mut content: Multipart, repository: web::Path<(String, Strin
         scheme.clone().map(|b| b.user_id().to_string()),
         scheme.map(|b| b.password().map(|p| p.to_string())).flatten(),
         &Permission::Write
-    ) {
+    ).await {
         Err(e) => return Err(e),
         _ => {}
     }
@@ -90,7 +90,7 @@ pub async fn upload(mut content: Multipart, repository: web::Path<(String, Strin
         file = PathBuf::from(string.get(3..).unwrap());
     }
 
-    let file = match provider.get_file(&file) {
+    let file = match provider.get_file(&file).await {
         Ok(file) => file,
         Err(e) => {
             error!("Invalid path for repo {}: {}!", repository, file.to_str().unwrap());
@@ -105,8 +105,8 @@ pub async fn upload(mut content: Multipart, repository: web::Path<(String, Strin
             None => return Err(ErrorBadRequest("Could not get filename!"))
         };
 
-        if web::block(enclose! { (file) move || file.exists() }).await? {
-            if web::block(enclose! { (file) move || file.is_file() }).await? {
+        if file.exists() {
+            if file.is_file() {
                 return Err(ErrorBadRequest("Could not create directory! File with the same name already exists!"))
             }
         } else {

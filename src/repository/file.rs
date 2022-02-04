@@ -1,23 +1,31 @@
 use std::collections::HashMap;
 use std::path::{PathBuf};
-use actix_web::Error;
-use actix_web::error::{ErrorForbidden, ErrorUnauthorized};
-use bcrypt::verify;
+use std::str::FromStr;
+use actix_rt::task;
+use actix_web::{Error};
+use actix_web::error::{ErrorForbidden, ErrorInternalServerError, ErrorUnauthorized};
+use async_trait::async_trait;
 use log::error;
 use path_clean::PathClean;
-use crate::config::{Permission, PermissionConfig, UserConfig};
+use crate::config::{PasswordType, Permission, PermissionConfig, UserConfig};
+use crate::enclose;
 use crate::repository::RepositoryProvider;
+use crate::utils::to_io_error;
 
 #[derive(Clone)]
 pub struct FileRepository {
     base_path: String,
     permissions: HashMap<String, Permission>,
-    users: HashMap<String, String>,
+    users: HashMap<String, (String, PasswordType)>,
     anonymous: Permission,
+
+    // #[cfg(feature = "blake3")]
+    blake3_hashes: HashMap<String, blake3::Hash>,
 }
 
+#[async_trait]
 impl RepositoryProvider for FileRepository {
-    fn get_file(&self, path: &PathBuf) -> Result<PathBuf, ()> {
+    async fn get_file(&self, path: &PathBuf) -> Result<PathBuf, ()> {
         let full_path = PathBuf::from(&self.base_path).join(path).clean();
 
         if !full_path.starts_with(&self.base_path) {
@@ -27,7 +35,7 @@ impl RepositoryProvider for FileRepository {
         return Ok(full_path);
     }
 
-    fn is_permitted(&self, user_id: Option<String>, password: Option<String>, required: &Permission) -> Result<(), Error> {
+    async fn is_permitted(&self, user_id: Option<String>, password: Option<String>, required: &Permission) -> Result<(), Error> {
         if user_id.is_none() {
             return if self.anonymous.is_permitted(&required) {
                 Ok(())
@@ -48,14 +56,22 @@ impl RepositoryProvider for FileRepository {
             None => return Err(ErrorUnauthorized("Username or password mismatch!"))
         };
 
-        let hash = match self.users.get(&user_id) {
-            Some(hash) => hash,
+        let (hash, password_type) = match self.users.get(&user_id) {
+            Some(hash) => hash.clone(),
             None => return Err(ErrorUnauthorized("Username or password mismatch!"))
         };
 
-        match verify(password, hash) {
-            Ok(m) =>
-                if m {
+        let blake3_hash = self.blake3_hashes.get(&user_id).cloned();
+
+        let res = task::spawn_blocking(enclose! { (password, hash, blake3_hash, password_type) move || match password_type {
+            PasswordType::BCrypt => to_io_error(bcrypt::verify(password, &hash)),
+            PasswordType::Argon2 => to_io_error(argon2::verify_encoded(&hash, password.as_bytes())),
+            PasswordType::Blake3 => Ok(blake3::hash(password.as_bytes()) == blake3_hash.unwrap())
+        }}).await.map_err(|e| ErrorInternalServerError(e))?;
+
+        match res {
+            Ok(r) =>
+                if r {
                     Ok(())
                 } else {
                     Err(ErrorUnauthorized("Username or password mismatch!"))
@@ -73,6 +89,7 @@ impl FileRepository {
         let mut anonymous = Permission::Read;
         let mut map = HashMap::new();
         let mut users = HashMap::new();
+        let mut blake3_hashes = HashMap::new();
 
         permissions.iter()
             .filter(|c| !c.anonymous)
@@ -82,7 +99,11 @@ impl FileRepository {
             });
 
         user_config.iter()
-            .for_each(|c| { users.insert(c.username.clone(), c.password.clone()); });
+            .for_each(|c| { users.insert(c.username.clone(), (c.password.clone(), c.password_type)); });
+
+        user_config.iter()
+            .filter(|c| c.password_type == PasswordType::Blake3)
+            .for_each(|c| { blake3_hashes.insert(c.username.clone(), blake3::Hash::from_str(c.password.as_str()).unwrap()); });
 
         let anonymous_config = permissions.iter()
             .filter(|c| c.anonymous)
@@ -95,6 +116,7 @@ impl FileRepository {
         Self {
             base_path: path,
             permissions: map,
+            blake3_hashes,
             anonymous,
             users,
         }
