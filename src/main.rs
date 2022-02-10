@@ -1,15 +1,13 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::io;
 use std::io::{BufReader, ErrorKind};
+use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
-use actix_cors::Cors;
-use actix_web::{App, HttpServer};
-use actix_web::web::Data;
 use clap::Arg;
 use log::{error};
-use simplelog::{ColorChoice, Config, TerminalMode, TermLogger};
+use rocket::{launch, routes};
+use simplelog::{ColorChoice, TerminalMode, TermLogger};
 use crate::config::RepositoryConfig;
 use crate::repository::file::FileRepository;
 use crate::repository::RepositoryProvider;
@@ -19,8 +17,8 @@ mod repository;
 mod rest;
 mod utils;
 
-#[actix_web::main]
-async fn main() -> Result<(), std::io::Error> {
+#[launch]
+fn launch() -> _ {
     let matches = clap::App::new("Simple Repository Manager")
         .version("0.1")
         .author("Gabriel Guldner <gabriel@guldner.eu>")
@@ -32,22 +30,22 @@ async fn main() -> Result<(), std::io::Error> {
             .required(true)
             .takes_value(true)
         ).arg(Arg::new("host")
-            .short('h')
-            .long("host")
-            .value_name("HOST")
-            .default_missing_value("127.0.0.1")
-        ).arg(Arg::new("port")
-            .short('p')
-            .long("port")
-            .value_name("PORT")
-            .default_missing_value("8080")
-        ).arg(Arg::new("verbose")
-            .short('v')
-            .multiple_occurrences(true)
-            .long("verbose")
-            .required(false)
-            .takes_value(false)
-        ).get_matches();
+        .short('h')
+        .long("host")
+        .value_name("HOST")
+        .default_missing_value("127.0.0.1")
+    ).arg(Arg::new("port")
+        .short('p')
+        .long("port")
+        .value_name("PORT")
+        .default_missing_value("8080")
+    ).arg(Arg::new("verbose")
+        .short('v')
+        .multiple_occurrences(true)
+        .long("verbose")
+        .required(false)
+        .takes_value(false)
+    ).get_matches();
 
     let level = match matches.occurrences_of("verbose") {
         0 => log::LevelFilter::Info,
@@ -57,24 +55,26 @@ async fn main() -> Result<(), std::io::Error> {
 
     TermLogger::init(
         level,
-        Config::default(),
+        simplelog::Config::default(),
         TerminalMode::Stdout,
         ColorChoice::Auto,
-    ).map_err(|e| std::io::Error::new(ErrorKind::Other, e))?;
+    ).map_err(|e| std::io::Error::new(ErrorKind::Other, e));
 
     let port = match u16::from_str(matches.value_of("port").unwrap()) {
         Ok(port) => port,
         Err(e) => {
             error!("Could not parse port: {}!", e);
-            return Err(io::Error::new(ErrorKind::Other, e));
+            exit(1);
         }
     };
+
+    let host = matches.value_of("host").unwrap_or("127.0.0.1");
 
     let config_file = match File::open(matches.value_of("config").unwrap()) {
         Ok(config_file) => config_file,
         Err(e) => {
             log::error!("Could not open config.yaml: {}", e);
-            return Err(e);
+            exit(1);
         }
     };
 
@@ -83,7 +83,7 @@ async fn main() -> Result<(), std::io::Error> {
         Ok(config) => config,
         Err(e) => {
             error!("Could not deserialize config: {}", e);
-            return Err(std::io::Error::new(ErrorKind::Other, e));
+            exit(1);
         }
     };
 
@@ -98,22 +98,11 @@ async fn main() -> Result<(), std::io::Error> {
         }
     }
 
-    let provider_data = Data::new(providers);
+    let figment = rocket::Config::figment()
+        .merge(("port", port))
+        .merge(("address", host));
 
-    HttpServer::new(move || {
-        let cors = Cors::default()
-            .allow_any_origin()
-            .allowed_methods(vec!["GET", "PUT"]);
-
-        App::new()
-            .wrap(cors)
-            .app_data(Data::clone(&provider_data))
-            .service(rest::retrieve)
-            .service(rest::upload)
-    })
-        .bind((matches.value_of("host").unwrap(), port))?
-        .run()
-        .await?;
-
-    Ok(())
+    rocket::custom(figment)
+        .manage(providers)
+        .mount("/", routes![rest::retrieve, rest::upload])
 }

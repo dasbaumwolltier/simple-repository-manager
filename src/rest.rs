@@ -1,17 +1,24 @@
 use std::collections::HashMap;
-use std::fs::{create_dir_all, File};
-use std::io::{ErrorKind, Write};
-use std::path::{Path, PathBuf};
+use std::fs::{copy, create_dir_all, File};
+use std::io::ErrorKind;
+use std::path::PathBuf;
 use std::sync::Arc;
-use actix_files::{NamedFile};
-use actix_multipart::Multipart;
-use actix_web::{Either, HttpResponse, Responder, web};
-use actix_web::{get, put};
-use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound};
-use actix_web_httpauth::headers::authorization::{Authorization, Basic};
-use futures_util::TryStreamExt;
-use log::error;
+// use actix_files::{NamedFile};
+// use actix_multipart::Multipart;
+// use actix_web::{Either, HttpResponse, Responder, web};
+// use actix_web::{get, put};
+// use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound};
+// use actix_web_httpauth::headers::authorization::{Authorization, Basic};
+use log::{error, trace};
 use path_clean::PathClean;
+use rocket::{Data, Either, FromForm, get, put, State};
+use rocket::data::ToByteUnit;
+use rocket::fs::{NamedFile, TempFile};
+use rocket::http::{ContentType, Status};
+use rocket::response::Responder;
+use rocket::response::status::{Custom, NotFound};
+use rocket::tokio::{fs, io, task};
+use rocket_basicauth::BasicAuth;
 use crate::{enclose, RepositoryProvider};
 use crate::config::Permission;
 
@@ -20,18 +27,21 @@ use crate::config::Permission;
 //     Ok(req)
 // }
 
-#[get("/{repository}/{path:[^?]*}")]
-pub async fn retrieve(repository: web::Path<(String, String)>, auth: Option<web::Header<Authorization<Basic>>>, providers: web::Data<HashMap<String, Arc<dyn RepositoryProvider + Send + Sync>>>) -> impl Responder {
-    let (repository, path) = repository.into_inner();
+#[derive(FromForm)]
+pub struct Upload<'r> {
+    file: Vec<TempFile<'r>>
+}
+
+#[get("/<repository>/<path..>")]
+pub async fn retrieve(repository: String, path: PathBuf, auth: Option<BasicAuth>, providers: &State<HashMap<String, Arc<dyn RepositoryProvider + Send + Sync>>>) -> impl Responder<'_, '_> {
     let provider = match providers.get(&repository) {
         Some(provider) => provider,
-        None => return Err(ErrorNotFound("Could not find repository!"))
+        None => return Err(Custom(Status::NotFound, String::from("Could not find repository!")))
     };
 
-    let scheme = auth.map(|a| a.into_inner().into_scheme());
     match provider.is_permitted(
-        scheme.clone().map(|b| b.user_id().to_string()),
-        scheme.map(|b| b.password().map(|p| p.to_string())).flatten(),
+        auth.as_ref().map(|b| b.username.to_owned()),
+        auth.as_ref().map(|b| b.password.to_owned()),
        &Permission::Read
     ).await {
         Err(e) => return Err(e),
@@ -48,7 +58,7 @@ pub async fn retrieve(repository: web::Path<(String, String)>, auth: Option<web:
         Ok(file) => file,
         Err(e) => {
             error!("Invalid path for repo {}: {}!", repository, file.to_str().unwrap());
-            return Err(ErrorBadRequest("Invalid path!"));
+            return Err(Custom(Status::BadRequest, String::from("Invalid path!")));
         }
     };
 
@@ -57,33 +67,37 @@ pub async fn retrieve(repository: web::Path<(String, String)>, auth: Option<web:
         return Ok(Either::Left(""))
     }
 
-    match NamedFile::open(file) {
+    match NamedFile::open(file).await {
         Ok(file) => Ok(Either::Right(file)),
         Err(e) => match e.kind() {
-            ErrorKind::NotFound => Err(ErrorNotFound("Could not find file!")),
-            _ => Err(ErrorInternalServerError(e))
+            ErrorKind::NotFound => Err(Custom(Status::NotFound, String::from("Could not find file!"))),
+            _ => Err(Custom(Status::InternalServerError, format!("{:?}", e)))
         }
     }
 }
 
-#[put("/{repository}/{path:[^?]*}")]
-pub async fn upload(mut content: Multipart, repository: web::Path<(String, String)>, auth: Option<web::Header<Authorization<Basic>>>, providers: web::Data<HashMap<String, Arc<dyn RepositoryProvider + Send + Sync>>>) -> impl Responder {
-    let (repository, path) = repository.into_inner();
+// #[put("/<repository>", data = "<data>")]
+// pub async fn upload(data: Data<'_>, cont_type: &ContentType, repository: String, auth: Option<BasicAuth>, providers: &State<HashMap<String, Arc<dyn RepositoryProvider + Send + Sync>>>) -> Result<Status, Custom<String>> {
+//     upload_path(data, cont_type, repository, None, auth, providers).await
+// }
+
+#[put("/<repository>/<path..>", data = "<data>")]
+pub async fn upload(mut data: Data<'_>, cont_type: &ContentType, repository: String, path: Option<PathBuf>, auth: Option<BasicAuth>, providers: &State<HashMap<String, Arc<dyn RepositoryProvider + Send + Sync>>>) -> Result<Status, Custom<String>> {
     let provider = match providers.get(&repository) {
         Some(provider) => provider,
-        None => return Err(ErrorNotFound("Could not find repository!"))
+        None => return Err(Custom(Status::NotFound, String::from("Could not find repository!")))
     };
 
-    let scheme = auth.map(|a| a.into_inner().into_scheme());
     match provider.is_permitted(
-        scheme.clone().map(|b| b.user_id().to_string()),
-        scheme.map(|b| b.password().map(|p| p.to_string())).flatten(),
+        auth.as_ref().map(|b| b.username.to_owned()),
+        auth.as_ref().map(|b| b.password.to_owned()),
         &Permission::Write
     ).await {
         Err(e) => return Err(e),
         _ => {}
     }
 
+    let path = path.unwrap_or(PathBuf::new());
     let mut file = PathBuf::from(path).clean();
     if file.starts_with("../") {
         let string = file.to_str().unwrap();
@@ -94,38 +108,44 @@ pub async fn upload(mut content: Multipart, repository: web::Path<(String, Strin
         Ok(file) => file,
         Err(e) => {
             error!("Invalid path for repo {}: {}!", repository, file.to_str().unwrap());
-            return Err(ErrorBadRequest("Invalid path!"));
+            return Err(Custom(Status::BadRequest, String::from("Invalid path!")));
         }
     };
-    while let Some(mut field) = content.try_next().await? {
-        let content_disposition = field.content_disposition();
 
-        let filename = match content_disposition.get_filename() {
-            Some(name) => name,
-            None => return Err(ErrorBadRequest("Could not get filename!"))
+    if !file.exists() {
+        let parent = match file.parent() {
+            Some(parent) => parent.clone(),
+            None => {
+                return Err(Custom(Status::BadRequest, String::from("Invalid path!")));
+            }
         };
 
-        if file.exists() {
-            if file.is_file() {
-                return Err(ErrorBadRequest("Could not create directory! File with the same name already exists!"))
-            }
-        } else {
-            match web::block(enclose! { (file) move || create_dir_all(file) }).await? {
-                Err(_) => return Err(ErrorInternalServerError("Could not create directory!")),
-                _ => {}
-            }
-        }
-
-        let file = file.clone().join(Path::new(&filename));
-        let mut file = match web::block(move || File::create(file)).await? {
-            Ok(file) => file,
-            Err(_) => return Err(ErrorInternalServerError("Could not write file!"))
-        };
-
-        while let Some(chunk) = field.try_next().await? {
-            file = web::block(move || file.write_all(&chunk).map(|_| file)).await??;
-        }
+        let parent = PathBuf::from(parent);
+        task::spawn_blocking(enclose! { (parent) move || create_dir_all(parent) }).await;
     }
 
-    Ok(HttpResponse::Created())
+    process_upload(file, data).await?;
+    Ok(Status::Created)
+}
+
+async fn process_upload(file: PathBuf, data: Data<'_>) -> Result<(), Custom<String>> {
+    let mut stream = data.open(1i32.gibibytes());
+    let mut file = match fs::File::create(&file).await {
+        Ok(file) => file,
+        Err(e) => {
+            error!("Could not open file: {}!", e);
+            return Err(Custom(Status::InternalServerError, String::new()))
+        }
+    };
+
+    trace!("Uploaded file has size {}", stream.hint());
+    match io::copy(&mut stream, &mut file).await {
+        Err(e) => {
+            error!("Could not write file: {}!", e);
+            return Err(Custom(Status::InternalServerError, String::new()))
+        },
+        _ => {}
+    }
+
+    Ok(())
 }

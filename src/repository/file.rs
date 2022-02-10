@@ -1,12 +1,12 @@
 use std::collections::HashMap;
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
-use actix_rt::task;
-use actix_web::{Error};
-use actix_web::error::{ErrorForbidden, ErrorInternalServerError, ErrorUnauthorized};
 use async_trait::async_trait;
 use log::error;
 use path_clean::PathClean;
+use rocket::http::Status;
+use rocket::response::status::Custom;
+use rocket::tokio::task;
 use crate::config::{PasswordType, Permission, PermissionConfig, UserConfig};
 use crate::enclose;
 use crate::repository::RepositoryProvider;
@@ -35,17 +35,17 @@ impl RepositoryProvider for FileRepository {
         return Ok(full_path);
     }
 
-    async fn is_permitted(&self, user_id: Option<String>, password: Option<String>, required: &Permission) -> Result<(), Error> {
+    async fn is_permitted(&self, user_id: Option<String>, password: Option<String>, required: &Permission) -> Result<(), Custom<String>> {
         if user_id.is_none() {
             return if self.anonymous.is_permitted(&required) {
                 Ok(())
             } else {
-                Err(ErrorForbidden("Anonymous user not permitted!"))
+                Err(Custom(Status::Forbidden, String::from("Anonymous user not permitted!")))
             };
         }
 
         if password.is_none() {
-            return Err(ErrorUnauthorized("No password given!"));
+            return Err(Custom(Status::Unauthorized, String::from("No password given!")));
         }
 
         let user_id = user_id.unwrap();
@@ -53,12 +53,12 @@ impl RepositoryProvider for FileRepository {
 
         let permission = match self.permissions.get(&user_id) {
             Some(permission) => permission,
-            None => return Err(ErrorUnauthorized("Username or password mismatch!"))
+            None => return Err(Custom(Status::Unauthorized, String::from("Username or password mismatch!")))
         };
 
         let (hash, password_type) = match self.users.get(&user_id) {
             Some(hash) => hash.clone(),
-            None => return Err(ErrorUnauthorized("Username or password mismatch!"))
+            None => return Err(Custom(Status::Unauthorized, String::from("Username or password mismatch!")))
         };
 
         let blake3_hash = self.blake3_hashes.get(&user_id).cloned();
@@ -67,18 +67,18 @@ impl RepositoryProvider for FileRepository {
             PasswordType::BCrypt => to_io_error(bcrypt::verify(password, &hash)),
             PasswordType::Argon2 => to_io_error(argon2::verify_encoded(&hash, password.as_bytes())),
             PasswordType::Blake3 => Ok(blake3::hash(password.as_bytes()) == blake3_hash.unwrap())
-        }}).await.map_err(|e| ErrorInternalServerError(e))?;
+        }}).await.map_err(|e| Custom(Status::InternalServerError, format!("{}", e)))?;
 
         match res {
             Ok(r) =>
                 if r {
                     Ok(())
                 } else {
-                    Err(ErrorUnauthorized("Username or password mismatch!"))
+                    Err(Custom(Status::Unauthorized, String::from("Username or password mismatch!")))
                 },
             Err(e) => {
                 error!("Could not verify password! {}", e);
-                return Err(ErrorUnauthorized("Username or password mismatch!"));
+                return Err(Custom(Status::Unauthorized, String::from("Username or password mismatch!")));
             }
         }
     }
