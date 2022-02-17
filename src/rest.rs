@@ -19,7 +19,7 @@ use rocket::response::Responder;
 use rocket::response::status::{Custom, NotFound};
 use rocket::tokio::{fs, io, task};
 use rocket_basicauth::BasicAuth;
-use crate::{enclose, RepositoryProvider};
+use crate::{enclose, Repository};
 use crate::config::Permission;
 
 // pub async fn validator(req: ServiceRequest, credentials: BasicAuth) -> Result<ServiceRequest, Error> {
@@ -33,7 +33,7 @@ pub struct Upload<'r> {
 }
 
 #[get("/<repository>/<path..>")]
-pub async fn retrieve(repository: String, path: PathBuf, auth: Option<BasicAuth>, providers: &State<HashMap<String, Arc<dyn RepositoryProvider + Send + Sync>>>) -> impl Responder<'_, '_> {
+pub async fn retrieve(repository: String, path: PathBuf, auth: Option<BasicAuth>, providers: &State<HashMap<String, Arc<dyn Repository + Send + Sync>>>) -> impl Responder<'_, '_> {
     let provider = match providers.get(&repository) {
         Some(provider) => provider,
         None => return Err(Custom(Status::NotFound, String::from("Could not find repository!")))
@@ -82,7 +82,7 @@ pub async fn retrieve(repository: String, path: PathBuf, auth: Option<BasicAuth>
 // }
 
 #[put("/<repository>/<path..>", data = "<data>")]
-pub async fn upload(mut data: Data<'_>, cont_type: &ContentType, repository: String, path: Option<PathBuf>, auth: Option<BasicAuth>, providers: &State<HashMap<String, Arc<dyn RepositoryProvider + Send + Sync>>>) -> Result<Status, Custom<String>> {
+pub async fn upload(mut data: Data<'_>, cont_type: &ContentType, repository: String, path: Option<PathBuf>, auth: Option<BasicAuth>, providers: &State<HashMap<String, Arc<dyn Repository + Send + Sync>>>) -> Result<Status, Custom<String>> {
     let provider = match providers.get(&repository) {
         Some(provider) => provider,
         None => return Err(Custom(Status::NotFound, String::from("Could not find repository!")))

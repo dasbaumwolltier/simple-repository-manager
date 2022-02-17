@@ -1,0 +1,45 @@
+# Defines all the repositories the server should serve
+repositories:
+  # This is an example for a file repository
+  # All types of Repositories have different config properties
+
+    # The type of the repository.
+  - type: file
+    # The name of the repository, also used in the URL
+    name: archlinux
+    # The base path to store the files to
+    path: /data/archlinux
+    # The permissions each user has on the repository
+    # For now this only includes three permissions:
+    #   none - No permission to access the repository
+    #   read - The user has read permission to the repository
+    #   write - The user can upload new files and overwrite old ones in the
+    #           repository
+    permissions:
+        # The username of the user
+      - username: archlinux
+        # The permission granted to the user
+        permission: write
+
+        # Special permission if no authentication/authorization is found
+      - anonymous: true
+        # Permission for anonymous users
+        permission: read
+
+# This is all the user management for now. These users are listed
+# with their username, their password in hash form and the type of
+# the hash.
+users:
+    # The username of the user
+  - username: archlinux
+    # The hash-format of the password. There are three types at the moment:
+    #   bcrypt - A (relatively old), secure password-hashing function
+    #   argon2 - A modern secure key derivation function
+    #   blake3 - A modern, fast cryptographic hash function
+    #            This should only be used if either brute-force attacks on
+    #            the hash are no concern or the speed of the request is a
+    #            concern, as the password has to be hashed every time for
+    #            HTTP basic auth.
+    password-type: blake3
+    # The password of the user in the respective hash format
+    password: 7adb787627ad5ee341fa0ba46a956e78fd85c39e195119bb260d5181b4f1e4ba

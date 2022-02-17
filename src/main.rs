@@ -10,7 +10,7 @@ use rocket::{launch, routes};
 use simplelog::{ColorChoice, TerminalMode, TermLogger};
 use crate::config::RepositoryConfig;
 use crate::repository::file::FileRepository;
-use crate::repository::RepositoryProvider;
+use crate::repository::Repository;
 
 mod config;
 mod repository;
@@ -30,22 +30,22 @@ fn launch() -> _ {
             .required(true)
             .takes_value(true)
         ).arg(Arg::new("host")
-        .short('h')
-        .long("host")
-        .value_name("HOST")
-        .default_missing_value("127.0.0.1")
-    ).arg(Arg::new("port")
-        .short('p')
-        .long("port")
-        .value_name("PORT")
-        .default_missing_value("8080")
-    ).arg(Arg::new("verbose")
-        .short('v')
-        .multiple_occurrences(true)
-        .long("verbose")
-        .required(false)
-        .takes_value(false)
-    ).get_matches();
+            .short('h')
+            .long("host")
+            .value_name("HOST")
+            .default_missing_value("127.0.0.1")
+        ).arg(Arg::new("port")
+            .short('p')
+            .long("port")
+            .value_name("PORT")
+            .default_missing_value("8080")
+        ).arg(Arg::new("verbose")
+            .short('v')
+            .multiple_occurrences(true)
+            .long("verbose")
+            .required(false)
+            .takes_value(false)
+        ).get_matches();
 
     let level = match matches.occurrences_of("verbose") {
         0 => log::LevelFilter::Info,
@@ -87,7 +87,7 @@ fn launch() -> _ {
         }
     };
 
-    let mut providers: HashMap<String, Arc<dyn RepositoryProvider + Send + Sync>> = HashMap::new();
+    let mut providers: HashMap<String, Arc<dyn Repository + Send + Sync>> = HashMap::new();
 
     for repository in config.repositories {
         match repository {
@@ -100,7 +100,8 @@ fn launch() -> _ {
 
     let figment = rocket::Config::figment()
         .merge(("port", port))
-        .merge(("address", host));
+        .merge(("address", host))
+        .merge(("level", "critical"));
 
     rocket::custom(figment)
         .manage(providers)

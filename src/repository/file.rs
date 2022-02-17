@@ -9,7 +9,7 @@ use rocket::response::status::Custom;
 use rocket::tokio::task;
 use crate::config::{PasswordType, Permission, PermissionConfig, UserConfig};
 use crate::enclose;
-use crate::repository::RepositoryProvider;
+use crate::repository::Repository;
 use crate::utils::to_io_error;
 
 #[derive(Clone)]
@@ -24,7 +24,7 @@ pub struct FileRepository {
 }
 
 #[async_trait]
-impl RepositoryProvider for FileRepository {
+impl Repository for FileRepository {
     async fn get_file(&self, path: &PathBuf) -> Result<PathBuf, ()> {
         let full_path = PathBuf::from(&self.base_path).join(path).clean();
 
