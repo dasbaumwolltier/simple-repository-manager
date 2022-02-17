@@ -220,7 +220,7 @@ Project Link: [https://github.com/dasbaumwolltier/simple-repository-manager](htt
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[build-shield]: https://img.shields.io/drone/build/Mirrors/simple-repository-manager?server=https%3A%2F%2Fdrone.guldner.eu
+[build-shield]: https://img.shields.io/drone/build/Mirrors/simple-repository-manager/release?server=https%3A%2F%2Fdrone.guldner.eu
 [build-url]: https://drone.guldner.eu/Mirrors/simple-repository-manager
 [release-shield]: https://img.shields.io/github/v/release/:user/:repo?display_name=tag&sort=semver
 [release-url]: https://github.com/dasbaumwolltier/simple-repository-manager/releases
