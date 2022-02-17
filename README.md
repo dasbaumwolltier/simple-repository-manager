@@ -194,7 +194,7 @@ Don't forget to give the project a star! Thanks again!
 <!-- LICENSE -->
 ## License
 
-This work is double-licensed under the MIT License and the Apache License 2.0. See `MIT-LICENSE` and `APACHE-LICENSE` respectively for more information.
+This work is licensed the Apache License 2.0. See `LICENSE` for more information.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
