@@ -29,8 +29,16 @@ pub enum RepositoryConfig {
     File {
         name: String,
         path: String,
-        permissions: Vec<PermissionConfig>
+        permissions: Vec<PermissionConfig>,
+        #[serde(default)]
+        authentication: AuthenticationConfig
     }
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum AuthenticationConfig {
+    Yaml
 }
 
 #[derive(Clone, Deserialize)]
@@ -57,5 +65,11 @@ impl Permission {
             Permission::Read => self == &Write || self == &Permission::Read,
             Permission::None => true
         }
+    }
+}
+
+impl Default for AuthenticationConfig {
+    fn default() -> Self {
+        AuthenticationConfig::Yaml
     }
 }

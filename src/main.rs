@@ -8,11 +8,15 @@ use clap::Arg;
 use log::{error};
 use rocket::{launch, routes};
 use simplelog::{ColorChoice, TerminalMode, TermLogger};
-use crate::config::RepositoryConfig;
+use crate::auth::AuthenticationProvider;
+use crate::auth::user_pass::UserPassAuthenticationProvider;
+use crate::config::{AuthenticationConfig, Config, RepositoryConfig};
 use crate::repository::file::FileRepository;
 use crate::repository::Repository;
 
+mod auth;
 mod config;
+mod constants;
 mod repository;
 mod rest;
 mod utils;
@@ -89,11 +93,13 @@ fn launch() -> _ {
 
     let mut providers: HashMap<String, Arc<dyn Repository + Send + Sync>> = HashMap::new();
 
-    for repository in config.repositories {
+    for repository in &config.repositories {
+        let authentication = AuthenticationConfig::default();
+
         match repository {
-            RepositoryConfig::File { name, path, permissions } => {
-                let repository = FileRepository::new(path, &permissions, &config.users);
-                providers.insert(name, Arc::new(repository));
+            RepositoryConfig::File { name, path, permissions, authentication } => {
+                let repository = FileRepository::new(path, &permissions, get_auth_provider(&config, authentication));
+                providers.insert(name.to_owned(), Arc::new(repository));
             }
         }
     }
@@ -106,4 +112,10 @@ fn launch() -> _ {
     rocket::custom(figment)
         .manage(providers)
         .mount("/", routes![rest::retrieve, rest::upload])
+}
+
+fn get_auth_provider(config: &Config, authentication: &AuthenticationConfig) -> Arc<dyn AuthenticationProvider + Send + Sync> {
+    Arc::new(match authentication {
+        AuthenticationConfig::Yaml => UserPassAuthenticationProvider::new(config)
+    })
 }

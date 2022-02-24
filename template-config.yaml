@@ -9,6 +9,10 @@ repositories:
     name: archlinux
     # The base path to store the files to
     path: /data/archlinux
+    # Defines the authentication used for this repository
+    authentication:
+      # The yaml type uses the users specified on the bottom of the file
+      type: yaml
     # The permissions each user has on the repository
     # For now this only includes three permissions:
     #   none - No permission to access the repository
